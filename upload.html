@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload TXT and Send to Google Sheets</title>
+    <style>
+        /* Global Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #444;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        h2 {
+            text-align: center;
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+            display: block;
+        }
+        input[type="file"], input[type="text"], button {
+            width: 100%;
+            padding: 14px;
+            margin: 12px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            background-color: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+        input[type="file"]:focus, input[type="text"]:focus {
+            border-color: #5c6bc0;
+            outline: none;
+            box-shadow: 0 0 6px rgba(92, 107, 192, 0.5);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:active {
+            background-color: #004085;
+        }
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            text-decoration: none;
+            color: #007bff;
+            transition: color 0.3s ease;
+        }
+        a:hover {
+            color: #0056b3;
+        }
+        .status-message {
+            text-align: center;
+            font-size: 16px;
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .message-success {
+            background-color: #e1f7e1;
+            color: #388e3c;
+        }
+        .message-error {
+            background-color: #f8d7da;
+            color: #d32f2f;
+        }
+        .message-info {
+            background-color: #e8f4fd;
+            color: #0288d1;
+        }
+        .message {
+            opacity: 0;
+            animation: fadeIn 1s forwards;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Upload Data File</h2>
+        <label for="fileInput">Select TXT File:</label>
+        <input type="file" id="fileInput" accept=".txt">
+        
+        <label for="stationName">Station Name:</label>
+        <input type="text" id="stationName" placeholder="Enter the station name">
+
+        <button onclick="processFile()">Upload</button>
+
+        <div id="status" class="status-message"></div>
+        
+        <a href="https://docs.google.com/spreadsheets/d/1HzOukM2v5Jt4vPR1fuWoMnyXfR36FHlmp0iriwDzCco" target="_blank">View Google Sheet</a>
+    </div>
+
+    <script>
+        function showMessage(message, isError = false) {
+            const statusEl = document.getElementById('status');
+            statusEl.classList.remove('message-success', 'message-error', 'message-info');
+
+            if (isError) {
+                statusEl.classList.add('message-error');
+            } else {
+                statusEl.classList.add('message-success');
+            }
+
+            statusEl.innerText = message;
+            statusEl.classList.add('message');
+
+            // Clear message after 15 seconds
+            setTimeout(() => {
+                statusEl.innerText = "";
+                statusEl.classList.remove('message');
+            }, 15000);
+        }
+
+        function processFile() {
+            const fileInput = document.getElementById('fileInput');
+            const stationName = document.getElementById('stationName').value.trim();
+            const statusEl = document.getElementById('status');
+
+            statusEl.innerText = ""; // Clear previous messages immediately
+
+            if (!fileInput.files.length) {
+                showMessage("⚠️ Please select a file.", true);
+                return;
+            }
+            if (!stationName) {
+                showMessage("⚠️ Please enter a station name.", true);
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const lines = event.target.result.split('\n').filter(line => line.trim());
+                const records = lines.map(line => {
+                    try {
+                        return JSON.parse(line);
+                    } catch (e) {
+                        console.error("Invalid JSON line:", line);
+                        return null;
+                    }
+                }).filter(record => record);
+
+                if (records.length === 0) {
+                    showMessage("⚠️ No valid data found in file.", true);
+                    return;
+                }
+
+                showMessage("✅ File successfully parsed. Sending data...");
+
+                const payload = {
+                    data_type: "tags",
+                    stationName: stationName,
+                    records: records
+                };
+
+                fetch("https://script.google.com/macros/s/AKfycbwSGmFqF-1o5tBIWRAwuKcXvZTE-OWOY8vK17IPau3SSpgSGgGeWlvwgMGe04Rybm1OGQ/exec", {
+                    method: "POST",
+                    mode: "no-cors",  // Bypasses CORS
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                })
+                .then(() => {
+                    showMessage("✅ PLEASE VERIFY DATA HAS BEEN SENT");
+                })
+                .catch(error => {
+                    console.error("Fetch Error:", error);
+                    showMessage("❌ Error sending request.", true);
+                });
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
